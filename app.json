@@ -2,6 +2,7 @@
   "expo": {
     "name": "full_emms",
     "slug": "full_emms",
+    "scheme": "fullemms",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

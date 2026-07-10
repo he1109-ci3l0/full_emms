@@ -12,6 +12,9 @@ import ChipContexto from '../../src/components/ChipContexto';
 import FABMono from '../../src/components/FABMono';
 import FondoFloral from '../../src/components/FondoFloral';
 import { useEventos, useNotas, usePendientes, useProyectos } from '../../src/lib/api/nucleo';
+import { useMedicamentos, useTomas } from '../../src/lib/api/salud';
+import { predecirCiclo } from '../../src/lib/ciclo';
+import { useCiclo } from '../../src/lib/api/salud';
 import { CONTEXTOS } from '../../src/lib/contextos';
 import { aISO } from '../../src/lib/fechas';
 import { HOJAS, LAVANDA, MORRIS, SUCULENTAS } from '../../src/theme/colores';
@@ -69,6 +72,15 @@ export default function Panel() {
   const { data: proyectos = [] } = useProyectos();
   const { data: notas = [] } = useNotas();
   const { data: eventosHoy = [] } = useEventos({ desde: today, hasta: today });
+  const { data: ciclos = [] } = useCiclo();
+  const { data: medicamentos = [] } = useMedicamentos();
+  const { data: tomasHoy = [] } = useTomas(today);
+
+  const prediccion = predecirCiclo(ciclos);
+  const cicloProximo = prediccion !== null && prediccion.diasRestantes <= 3;
+  const activos = medicamentos.filter((m) => m.activo);
+  const tomasPendientes = activos.flatMap((m) => m.horarios).length - tomasHoy.length;
+  const recordatoriosSalud = (cicloProximo ? 1 : 0) + (tomasPendientes > 0 ? 1 : 0);
 
   const vencidos = pendientesActivos.filter(
     (p) => p.fecha_limite && p.fecha_limite < today,
@@ -120,6 +132,12 @@ export default function Panel() {
             ))}
           </View>
         ) : null}
+
+        {recordatoriosSalud > 0 && (
+          <TouchableOpacity style={styles.seccion} onPress={() => router.push('/(tabs)/salud')} activeOpacity={0.85}>
+            <Text style={styles.seccionTit}>Salud: {recordatoriosSalud} recordatorio{recordatoriosSalud > 1 ? 's' : ''}</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.seccion}>
           <View style={styles.seccionCabecera}>

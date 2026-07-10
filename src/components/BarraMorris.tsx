@@ -18,6 +18,7 @@ export default function BarraMorris({ titulo, subtitulo }: Props) {
       source={require('../../assets/tapiz_morris_barra.jpg')}
       style={[styles.container, { paddingTop: insets.top + 8 }]}
       contentFit="cover"
+      contentPosition="top"
     >
       <View style={styles.placa}>
         <Text style={styles.titulo}>{titulo}</Text>

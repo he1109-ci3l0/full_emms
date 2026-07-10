@@ -1,28 +1,217 @@
-import React from 'react';
-import { Text, StyleSheet } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import React, { useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 import BarraMorris from '../../src/components/BarraMorris';
+import FABMono from '../../src/components/FABMono';
 import FondoFloral from '../../src/components/FondoFloral';
-import Tarjeta from '../../src/components/Tarjeta';
-import { ACENTOS } from '../../src/theme/acentos';
+import { useNotas, usePendientes, useProyectos } from '../../src/lib/api/nucleo';
+import { CONTEXTOS } from '../../src/lib/contextos';
+import { HOJAS, LAVANDA, MORRIS, SUCULENTAS } from '../../src/theme/colores';
 import { TIPOGRAFIA } from '../../src/theme/tipografia';
-import { MORRIS } from '../../src/theme/colores';
+import type { Pendiente } from '../../src/types/nucleo';
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
+
+function ContadorAnimado({ valor, estilo }: { valor: number; estilo: object }) {
+  const animado = useSharedValue(0);
+
+  useEffect(() => {
+    animado.value = withTiming(valor, { duration: 750, easing: Easing.out(Easing.quad) });
+  }, [valor]);
+
+  const props = useAnimatedProps(() => ({
+    value: Math.round(animado.value).toString(),
+  }));
+
+  return (
+    <AnimatedTextInput
+      animatedProps={props}
+      editable={false}
+      caretHidden
+      style={estilo}
+    />
+  );
+}
+
+function formatFecha(iso: string) {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function ItemVencimiento({ item }: { item: Pendiente }) {
+  const colorCtx = CONTEXTOS[item.contexto]?.color ?? HOJAS.malvaGris;
+  return (
+    <View style={[styles.itemVenc, { borderLeftColor: colorCtx }]}>
+      <Text style={styles.itemVencTit} numberOfLines={1}>{item.titulo}</Text>
+      {item.fecha_limite ? (
+        <Text style={styles.itemVencFecha}>{formatFecha(item.fecha_limite)}</Text>
+      ) : null}
+    </View>
+  );
+}
 
 export default function Panel() {
+  const router = useRouter();
+  const today = new Date().toISOString().split('T')[0];
+  const in7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const { data: pendientesActivos = [] } = usePendientes({ hecho: false });
+  const { data: proyectos = [] } = useProyectos();
+  const { data: notas = [] } = useNotas();
+
+  const vencidos = pendientesActivos.filter(
+    (p) => p.fecha_limite && p.fecha_limite < today,
+  ).length;
+  const vencen7 = pendientesActivos.filter(
+    (p) => p.fecha_limite && p.fecha_limite >= today && p.fecha_limite <= in7,
+  ).length;
+  const numActivos = pendientesActivos.length;
+  const numProyActivos = proyectos.filter((p) => p.estado === 'activo').length;
+
+  const proximosVencimientos = pendientesActivos
+    .filter((p) => p.fecha_limite)
+    .slice(0, 5);
+
+  const ultimasNotas = notas.slice(0, 3);
+
   return (
     <FondoFloral>
-      <BarraMorris titulo="full emms" subtitulo="panel principal" />
-      <Animated.View entering={FadeInDown} style={styles.cuerpo}>
-        <Tarjeta acento={ACENTOS.panel} style={styles.tarjeta}>
-          <Text style={styles.nombre}>Panel</Text>
-        </Tarjeta>
-      </Animated.View>
+      <BarraMorris titulo="full emms" subtitulo="panel principal" onAccion={() => router.push('/respaldo')} />
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.kpis}>
+          <KPICard
+            etiqueta="Vencidos"
+            valor={vencidos}
+            color={HOJAS.vino}
+          />
+          <KPICard
+            etiqueta="7 días"
+            valor={vencen7}
+            color={HOJAS.caramelo}
+          />
+          <KPICard
+            etiqueta="Pendientes"
+            valor={numActivos}
+            color={SUCULENTAS.pizarra}
+          />
+          <KPICard
+            etiqueta="Proyectos"
+            valor={numProyActivos}
+            color={LAVANDA.ciruelaOscura}
+          />
+        </View>
+
+        {proximosVencimientos.length > 0 ? (
+          <View style={styles.seccion}>
+            <Text style={styles.seccionTit}>Próximos vencimientos</Text>
+            {proximosVencimientos.map((p) => (
+              <ItemVencimiento key={p.id} item={p} />
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.seccion}>
+          <View style={styles.seccionCabecera}>
+            <Text style={styles.seccionTit}>Últimas notas</Text>
+            <TouchableOpacity onPress={() => router.push('/notas')}>
+              <Text style={styles.verTodas}>ver todas</Text>
+            </TouchableOpacity>
+          </View>
+          {ultimasNotas.length === 0 ? (
+            <Text style={styles.vacio}>sin notas todavía…</Text>
+          ) : (
+            ultimasNotas.map((n) => (
+              <View key={n.id} style={styles.notaCard}>
+                <Text style={styles.notaTxt} numberOfLines={3}>{n.texto}</Text>
+                <Text style={styles.notaFecha}>
+                  {new Date(n.created_at).toLocaleDateString('es-MX', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  })}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+
+      <FABMono onPress={() => router.push('/notas')} />
     </FondoFloral>
   );
 }
 
+function KPICard({ etiqueta, valor, color }: { etiqueta: string; valor: number; color: string }) {
+  return (
+    <View style={[styles.kpiCard, { borderTopColor: color }]}>
+      <ContadorAnimado valor={valor} estilo={[styles.kpiNum, { color }]} />
+      <Text style={styles.kpiEtiqueta}>{etiqueta}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  cuerpo: { flex: 1, padding: 16 },
-  tarjeta: { marginTop: 8 },
-  nombre: { ...TIPOGRAFIA.titulo, fontSize: 20, color: MORRIS.tinta },
+  scroll: { padding: 14, paddingBottom: 100, gap: 16 },
+  kpis: { flexDirection: 'row', gap: 8 },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: HOJAS.hueso,
+    borderRadius: 10,
+    borderTopWidth: 4,
+    borderWidth: 1,
+    borderColor: HOJAS.malvaGris,
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  kpiNum: {
+    ...TIPOGRAFIA.titulo,
+    fontSize: 28,
+    textAlign: 'center',
+    minWidth: 40,
+  },
+  kpiEtiqueta: {
+    ...TIPOGRAFIA.etiqueta,
+    fontSize: 9,
+    color: MORRIS.salviaMorris,
+    textAlign: 'center',
+  },
+  seccion: {
+    backgroundColor: 'rgba(238,231,225,0.80)',
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
+  seccionCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  seccionTit: { ...TIPOGRAFIA.titulo, fontSize: 15, color: MORRIS.granate },
+  verTodas: { ...TIPOGRAFIA.firma, fontSize: 16, color: MORRIS.oliva },
+  itemVenc: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    paddingLeft: 10,
+    paddingVertical: 4,
+  },
+  itemVencTit: { ...TIPOGRAFIA.cuerpo, fontSize: 14, color: MORRIS.tinta, flex: 1 },
+  itemVencFecha: { ...TIPOGRAFIA.etiqueta, fontSize: 10, color: MORRIS.salviaMorris },
+  notaCard: {
+    backgroundColor: SUCULENTAS.rosaPalido,
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  notaTxt: { ...TIPOGRAFIA.cuerpo, fontSize: 14, color: MORRIS.tinta },
+  notaFecha: { ...TIPOGRAFIA.etiqueta, fontSize: 10, color: MORRIS.salviaMorris },
+  vacio: { ...TIPOGRAFIA.firma, fontSize: 18, color: HOJAS.salvia, textAlign: 'center' },
 });

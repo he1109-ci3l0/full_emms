@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { ImageBackground } from 'expo-image';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ImageBackground, Image } from 'expo-image';
 import { MORRIS } from '../theme/colores';
 import { TIPOGRAFIA } from '../theme/tipografia';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,9 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type Props = {
   titulo: string;
   subtitulo?: string;
+  onAccion?: () => void;
 };
 
-export default function BarraMorris({ titulo, subtitulo }: Props) {
+export default function BarraMorris({ titulo, subtitulo, onAccion }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -24,6 +25,15 @@ export default function BarraMorris({ titulo, subtitulo }: Props) {
         <Text style={styles.titulo}>{titulo}</Text>
         {subtitulo ? <Text style={styles.subtitulo}>{subtitulo}</Text> : null}
       </View>
+      {onAccion ? (
+        <TouchableOpacity onPress={onAccion} style={styles.accionBtn}>
+          <Image
+            source={require('../../assets/mono_sombrero.jpg')}
+            style={styles.accionImg}
+            contentFit="cover"
+          />
+        </TouchableOpacity>
+      ) : null}
     </ImageBackground>
   );
 }
@@ -56,4 +66,16 @@ const styles = StyleSheet.create({
     color: MORRIS.oliva,
     marginTop: 2,
   },
+  accionBtn: {
+    position: 'absolute',
+    right: 14,
+    bottom: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: MORRIS.granate,
+  },
+  accionImg: { width: '100%', height: '100%' },
 });

@@ -3,9 +3,9 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
-import { ImageBackground } from 'expo-image';
 import { router } from 'expo-router';
 import { supabase } from '../src/lib/supabase';
+import FondoFloral from '../src/components/FondoFloral';
 import { MORRIS, HOJAS, SUCULENTAS } from '../src/theme/colores';
 import { TIPOGRAFIA } from '../src/theme/tipografia';
 
@@ -26,12 +26,7 @@ export default function Login() {
   }
 
   return (
-    <ImageBackground
-      source={require('../assets/tapiz_floral.jpg')}
-      style={styles.bg}
-      contentFit="cover"
-    >
-      <View style={styles.velo} />
+    <FondoFloral>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.centrar}
@@ -64,16 +59,11 @@ export default function Login() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </FondoFloral>
   );
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  velo: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(234,228,220,0.42)',
-  },
   centrar: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   tarjeta: {
     width: '100%',

@@ -8,35 +8,25 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import BarraMorris from '../../src/components/BarraMorris';
+import ChipContexto from '../../src/components/ChipContexto';
 import FABMono from '../../src/components/FABMono';
 import FondoFloral from '../../src/components/FondoFloral';
-import { useNotas, usePendientes, useProyectos } from '../../src/lib/api/nucleo';
+import { useEventos, useNotas, usePendientes, useProyectos } from '../../src/lib/api/nucleo';
 import { CONTEXTOS } from '../../src/lib/contextos';
+import { aISO } from '../../src/lib/fechas';
 import { HOJAS, LAVANDA, MORRIS, SUCULENTAS } from '../../src/theme/colores';
 import { TIPOGRAFIA } from '../../src/theme/tipografia';
-import type { Pendiente } from '../../src/types/nucleo';
+import type { Evento, Pendiente } from '../../src/types/nucleo';
 
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
 function ContadorAnimado({ valor, estilo }: { valor: number; estilo: object }) {
   const animado = useSharedValue(0);
-
   useEffect(() => {
     animado.value = withTiming(valor, { duration: 750, easing: Easing.out(Easing.quad) });
   }, [valor]);
-
-  const props = useAnimatedProps(() => ({
-    value: Math.round(animado.value).toString(),
-  }));
-
-  return (
-    <AnimatedTextInput
-      animatedProps={props}
-      editable={false}
-      caretHidden
-      style={estilo}
-    />
-  );
+  const props = useAnimatedProps(() => ({ value: Math.round(animado.value).toString() }));
+  return <AnimatedTextInput animatedProps={props} editable={false} caretHidden style={estilo} />;
 }
 
 function formatFecha(iso: string) {
@@ -56,14 +46,29 @@ function ItemVencimiento({ item }: { item: Pendiente }) {
   );
 }
 
+function ItemAgenda({ evento }: { evento: Evento }) {
+  return (
+    <View style={styles.agendaFila}>
+      {evento.hora ? (
+        <Text style={styles.agendaHora}>{evento.hora.slice(0, 5)}</Text>
+      ) : (
+        <Text style={styles.agendaHora}>—</Text>
+      )}
+      <Text style={styles.agendaTit} numberOfLines={1}>{evento.titulo}</Text>
+      <ChipContexto contexto={evento.contexto} />
+    </View>
+  );
+}
+
 export default function Panel() {
   const router = useRouter();
-  const today = new Date().toISOString().split('T')[0];
-  const in7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const today = aISO(new Date());
+  const in7 = aISO(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
   const { data: pendientesActivos = [] } = usePendientes({ hecho: false });
   const { data: proyectos = [] } = useProyectos();
   const { data: notas = [] } = useNotas();
+  const { data: eventosHoy = [] } = useEventos({ desde: today, hasta: today });
 
   const vencidos = pendientesActivos.filter(
     (p) => p.fecha_limite && p.fecha_limite < today,
@@ -74,39 +79,38 @@ export default function Panel() {
   const numActivos = pendientesActivos.length;
   const numProyActivos = proyectos.filter((p) => p.estado === 'activo').length;
 
-  const proximosVencimientos = pendientesActivos
-    .filter((p) => p.fecha_limite)
-    .slice(0, 5);
-
+  const proximosVencimientos = pendientesActivos.filter((p) => p.fecha_limite).slice(0, 5);
   const ultimasNotas = notas.slice(0, 3);
 
   return (
     <FondoFloral>
-      <BarraMorris titulo="full emms" subtitulo="panel principal" onAccion={() => router.push('/respaldo')} />
+      <BarraMorris
+        titulo="full emms"
+        subtitulo="panel principal"
+        onAccion={() => router.push('/respaldo')}
+      />
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.kpis}>
-          <KPICard
-            etiqueta="Vencidos"
-            valor={vencidos}
-            color={HOJAS.vino}
-          />
-          <KPICard
-            etiqueta="7 días"
-            valor={vencen7}
-            color={HOJAS.caramelo}
-          />
-          <KPICard
-            etiqueta="Pendientes"
-            valor={numActivos}
-            color={SUCULENTAS.pizarra}
-          />
-          <KPICard
-            etiqueta="Proyectos"
-            valor={numProyActivos}
-            color={LAVANDA.ciruelaOscura}
-          />
+          <KPICard etiqueta="Vencidos"    valor={vencidos}       color={HOJAS.vino} />
+          <KPICard etiqueta="7 días"      valor={vencen7}        color={HOJAS.caramelo} />
+          <KPICard etiqueta="Pendientes"  valor={numActivos}     color={SUCULENTAS.pizarra} />
+          <KPICard etiqueta="Proyectos"   valor={numProyActivos} color={LAVANDA.ciruelaOscura} />
         </View>
+
+        {/* Hoy en agenda */}
+        <TouchableOpacity
+          style={styles.seccion}
+          onPress={() => router.push('/(tabs)/calendario?vista=dia')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.seccionTit}>Hoy en agenda</Text>
+          {eventosHoy.length === 0 ? (
+            <Text style={styles.despejado}>día despejado</Text>
+          ) : (
+            eventosHoy.map((e) => <ItemAgenda key={e.id} evento={e} />)
+          )}
+        </TouchableOpacity>
 
         {proximosVencimientos.length > 0 ? (
           <View style={styles.seccion}>
@@ -159,58 +163,32 @@ const styles = StyleSheet.create({
   scroll: { padding: 14, paddingBottom: 100, gap: 16 },
   kpis: { flexDirection: 'row', gap: 8 },
   kpiCard: {
-    flex: 1,
-    backgroundColor: HOJAS.hueso,
-    borderRadius: 10,
-    borderTopWidth: 4,
-    borderWidth: 1,
-    borderColor: HOJAS.malvaGris,
-    padding: 10,
-    alignItems: 'center',
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 3,
-    elevation: 2,
+    flex: 1, backgroundColor: HOJAS.hueso, borderRadius: 10,
+    borderTopWidth: 4, borderWidth: 1, borderColor: HOJAS.malvaGris,
+    padding: 10, alignItems: 'center', gap: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 3, elevation: 2,
   },
-  kpiNum: {
-    ...TIPOGRAFIA.titulo,
-    fontSize: 28,
-    textAlign: 'center',
-    minWidth: 40,
-  },
-  kpiEtiqueta: {
-    ...TIPOGRAFIA.etiqueta,
-    fontSize: 9,
-    color: MORRIS.salviaMorris,
-    textAlign: 'center',
-  },
+  kpiNum: { ...TIPOGRAFIA.titulo, fontSize: 28, textAlign: 'center', minWidth: 40 },
+  kpiEtiqueta: { ...TIPOGRAFIA.etiqueta, fontSize: 9, color: MORRIS.salviaMorris, textAlign: 'center' },
   seccion: {
     backgroundColor: 'rgba(238,231,225,0.80)',
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
+    borderRadius: 12, padding: 14, gap: 8,
   },
   seccionCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   seccionTit: { ...TIPOGRAFIA.titulo, fontSize: 15, color: MORRIS.granate },
   verTodas: { ...TIPOGRAFIA.firma, fontSize: 16, color: MORRIS.oliva },
+  despejado: { ...TIPOGRAFIA.firma, fontSize: 18, color: HOJAS.salvia },
+  agendaFila: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
+  agendaHora: { ...TIPOGRAFIA.etiqueta, fontSize: 11, color: MORRIS.salviaMorris, minWidth: 40 },
+  agendaTit: { ...TIPOGRAFIA.cuerpo, fontSize: 14, color: MORRIS.tinta, flex: 1 },
   itemVenc: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    paddingLeft: 10,
-    paddingVertical: 4,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderLeftWidth: 4, paddingLeft: 10, paddingVertical: 4,
   },
   itemVencTit: { ...TIPOGRAFIA.cuerpo, fontSize: 14, color: MORRIS.tinta, flex: 1 },
   itemVencFecha: { ...TIPOGRAFIA.etiqueta, fontSize: 10, color: MORRIS.salviaMorris },
-  notaCard: {
-    backgroundColor: SUCULENTAS.rosaPalido,
-    borderRadius: 8,
-    padding: 10,
-    gap: 4,
-  },
+  notaCard: { backgroundColor: SUCULENTAS.rosaPalido, borderRadius: 8, padding: 10, gap: 4 },
   notaTxt: { ...TIPOGRAFIA.cuerpo, fontSize: 14, color: MORRIS.tinta },
   notaFecha: { ...TIPOGRAFIA.etiqueta, fontSize: 10, color: MORRIS.salviaMorris },
   vacio: { ...TIPOGRAFIA.firma, fontSize: 18, color: HOJAS.salvia, textAlign: 'center' },

@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { ImageBackground, Image } from 'expo-image';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ImageBackground } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MORRIS } from '../theme/colores';
 import { TIPOGRAFIA } from '../theme/tipografia';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   titulo: string;
@@ -11,65 +11,86 @@ type Props = {
   onAccion?: () => void;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const barraUri: string = require('../../assets/tapiz_morris_barra.jpg');
+
 export default function BarraMorris({ titulo, subtitulo, onAccion }: Props) {
   const insets = useSafeAreaInsets();
+  const pt = insets.top + 16;
+
+  const innerContent = (
+    <>
+      <View style={s.placaRow}>
+        <View style={s.placa}>
+          <Text style={s.titulo}>{titulo}</Text>
+          {subtitulo ? <Text style={s.subtitulo}>{subtitulo}</Text> : null}
+        </View>
+      </View>
+      <View style={s.actionsRow}>
+        {onAccion ? (
+          <TouchableOpacity onPress={onAccion} style={s.accionBtn}>
+            <Image
+              source={require('../../assets/mono_sombrero.jpg')}
+              style={s.accionImg}
+              contentFit="cover"
+            />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </>
+  );
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[s.container, { paddingTop: pt }, s.webBg as any]}>
+        {innerContent}
+      </View>
+    );
+  }
 
   return (
     <ImageBackground
       source={require('../../assets/tapiz_morris_barra.jpg')}
-      style={[styles.container, { paddingTop: insets.top + 8 }]}
-      contentFit="cover"
-      contentPosition="top"
+      style={[s.container, { paddingTop: pt }]}
+      contentFit="none"
+      contentPosition="top left"
     >
-      <View style={styles.placa}>
-        <Text style={styles.titulo}>{titulo}</Text>
-        {subtitulo ? <Text style={styles.subtitulo}>{subtitulo}</Text> : null}
-      </View>
-      {onAccion ? (
-        <TouchableOpacity onPress={onAccion} style={styles.accionBtn}>
-          <Image
-            source={require('../../assets/mono_sombrero.jpg')}
-            style={styles.accionImg}
-            contentFit="cover"
-          />
-        </TouchableOpacity>
-      ) : null}
+      {innerContent}
     </ImageBackground>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     width: '100%',
-    paddingBottom: 12,
     borderBottomWidth: 4,
     borderBottomColor: MORRIS.granate,
+    paddingBottom: 12,
+    overflow: 'hidden',
+  },
+  placaRow: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    marginTop: 6,
   },
   placa: {
     backgroundColor: 'rgba(245,240,228,0.88)',
     paddingHorizontal: 20,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 6,
     alignItems: 'center',
-    marginTop: 8,
   },
-  titulo: {
-    ...TIPOGRAFIA.titulo,
-    fontSize: 22,
-    color: MORRIS.granate,
-  },
-  subtitulo: {
-    ...TIPOGRAFIA.firma,
-    fontSize: 16,
-    color: MORRIS.oliva,
-    marginTop: 2,
+  titulo: { ...TIPOGRAFIA.titulo, fontSize: 22, color: MORRIS.granate },
+  subtitulo: { ...TIPOGRAFIA.firma, fontSize: 16, color: MORRIS.oliva, marginTop: 2 },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    minHeight: 48,
   },
   accionBtn: {
-    position: 'absolute',
-    right: 14,
-    bottom: 10,
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -78,4 +99,10 @@ const styles = StyleSheet.create({
     borderColor: MORRIS.granate,
   },
   accionImg: { width: '100%', height: '100%' },
+  webBg: {
+    backgroundImage: `url(${barraUri})`,
+    backgroundRepeat: 'repeat-x',
+    backgroundSize: 'auto 100%',
+    backgroundPosition: 'top left',
+  } as any,
 });

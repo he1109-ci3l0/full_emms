@@ -13,10 +13,11 @@ import FABMono from '../../src/components/FABMono';
 import FondoFloral from '../../src/components/FondoFloral';
 import { useEventos, useNotas, usePendientes, useProyectos } from '../../src/lib/api/nucleo';
 import { useMedicamentos, useTomas } from '../../src/lib/api/salud';
+import { useEntrevistas } from '../../src/lib/api/trabajo';
 import { predecirCiclo } from '../../src/lib/ciclo';
 import { useCiclo } from '../../src/lib/api/salud';
 import { CONTEXTOS } from '../../src/lib/contextos';
-import { aISO } from '../../src/lib/fechas';
+import { aISO, sumarDias } from '../../src/lib/fechas';
 import { HOJAS, LAVANDA, MORRIS, SUCULENTAS } from '../../src/theme/colores';
 import { TIPOGRAFIA } from '../../src/theme/tipografia';
 import type { Evento, Pendiente } from '../../src/types/nucleo';
@@ -75,6 +76,9 @@ export default function Panel() {
   const { data: ciclos = [] } = useCiclo();
   const { data: medicamentos = [] } = useMedicamentos();
   const { data: tomasHoy = [] } = useTomas(today);
+  const { data: entrevistas = [] } = useEntrevistas();
+  const manana = aISO(sumarDias(new Date(), 1));
+  const entrevistasCercanas = entrevistas.filter((e) => e.fecha === today || e.fecha === manana);
 
   const prediccion = predecirCiclo(ciclos);
   const cicloProximo = prediccion !== null && prediccion.diasRestantes <= 3;
@@ -132,6 +136,18 @@ export default function Panel() {
             ))}
           </View>
         ) : null}
+
+        {entrevistasCercanas.length > 0 && (
+          <TouchableOpacity style={styles.seccion} onPress={() => router.push('/(tabs)/trabajo')} activeOpacity={0.85}>
+            <Text style={styles.seccionTit}>Entrevistas próximas</Text>
+            {entrevistasCercanas.map((e) => (
+              <View key={e.id} style={styles.agendaFila}>
+                <Text style={styles.agendaHora}>{e.fecha === today ? 'hoy' : 'mañana'}{e.hora ? ` · ${e.hora.slice(0, 5)}` : ''}</Text>
+                <Text style={styles.agendaTit} numberOfLines={1}>{e.empresa} — {e.puesto}</Text>
+              </View>
+            ))}
+          </TouchableOpacity>
+        )}
 
         {recordatoriosSalud > 0 && (
           <TouchableOpacity style={styles.seccion} onPress={() => router.push('/(tabs)/salud')} activeOpacity={0.85}>

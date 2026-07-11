@@ -60,6 +60,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="notas" />
             <Stack.Screen name="respaldo" />
+            <Stack.Screen name="chats" />
           </Stack>
         </SafeAreaProvider>
       </AvisoProvider>

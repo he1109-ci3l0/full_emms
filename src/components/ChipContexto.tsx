@@ -8,10 +8,10 @@ import type { ContextoClave } from '../types/nucleo';
 type Props = { contexto: ContextoClave };
 
 export default function ChipContexto({ contexto }: Props) {
-  const { color, etiqueta } = CONTEXTOS[contexto];
+  const item = CONTEXTOS[contexto] ?? { color: SUCULENTAS.salviaClara, etiqueta: contexto };
   return (
-    <View style={[styles.pill, { backgroundColor: color }]}>
-      <Text style={styles.texto}>{etiqueta}</Text>
+    <View style={[styles.pill, { backgroundColor: item.color }]}>
+      <Text style={styles.texto}>{item.etiqueta}</Text>
     </View>
   );
 }

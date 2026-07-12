@@ -19,9 +19,11 @@ const ETIQUETA: Record<Prioridad, string> = {
 type Props = { prioridad: Prioridad };
 
 export default function ChipPrioridad({ prioridad }: Props) {
+  const color = COLOR[prioridad] ?? HOJAS.malvaGris;
+  const etiqueta = ETIQUETA[prioridad] ?? prioridad;
   return (
-    <View style={[styles.pill, { backgroundColor: COLOR[prioridad] }]}>
-      <Text style={styles.texto}>{ETIQUETA[prioridad]}</Text>
+    <View style={[styles.pill, { backgroundColor: color }]}>
+      <Text style={styles.texto}>{etiqueta}</Text>
     </View>
   );
 }

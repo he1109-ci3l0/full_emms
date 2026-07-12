@@ -98,7 +98,7 @@ async function sincronizarEvento(entrevista: {
     fecha: entrevista.fecha,
     hora: entrevista.hora,
     tipo: 'entrevista' as const,
-    contexto: 'trabajo' as const,
+    contexto: 'consultoria' as const,
     duracion_min: 60,
     lugar: null,
     vinculo_id: null,

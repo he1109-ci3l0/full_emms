@@ -4,6 +4,7 @@ import { Image, ImageBackground } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MORRIS } from '../theme/colores';
 import { TIPOGRAFIA } from '../theme/tipografia';
+import CampanaAlertas from './CampanaAlertas';
 
 type Props = {
   titulo: string;
@@ -27,8 +28,9 @@ export default function BarraMorris({ titulo, subtitulo, onAccion }: Props) {
         </View>
       </View>
       <View style={s.actionsRow}>
+        <CampanaAlertas />
         {onAccion ? (
-          <TouchableOpacity onPress={onAccion} style={s.accionBtn}>
+          <TouchableOpacity onPress={onAccion} style={[s.accionBtn, { marginLeft: 8 }]}>
             <Image
               source={require('../../assets/mono_sombrero.jpg')}
               style={s.accionImg}

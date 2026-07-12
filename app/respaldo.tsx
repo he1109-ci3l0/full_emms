@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -15,9 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import FondoFloral from '../src/components/FondoFloral';
 import { supabase } from '../src/lib/supabase';
+import { obtenerTokenWebPush } from '../src/lib/notificaciones';
+import { useRegistrarDispositivo } from '../src/lib/api/alertas';
+import { useGuardarPreferencia, usePreferencias } from '../src/lib/api/secretaria';
 import { HOJAS, MORRIS, SUCULENTAS } from '../src/theme/colores';
 import { TIPOGRAFIA } from '../src/theme/tipografia';
 import type { ContextoClave, EstadoProyecto, Prioridad, TipoEvento } from '../src/types/nucleo';
+import type { SilencioConfig } from '../src/types/alertas';
 
 type GabineteProyecto = {
   nombre: string;
@@ -159,11 +164,56 @@ async function exportarJSON(): Promise<string> {
   );
 }
 
-export default function Respaldo() {
+const RE_HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export default function Ajustes() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+
+  const { data: preferencias } = usePreferencias();
+  const guardar = useGuardarPreferencia();
+  const registrarDispositivo = useRegistrarDispositivo();
+
+  const silencioGuardado = preferencias?.silencio as SilencioConfig | undefined;
+  const [silencioInicio, setSilencioInicio] = useState('22:00');
+  const [silencioFin, setSilencioFin] = useState('07:30');
+  const [silencioMsg, setSilencioMsg] = useState('');
+  const [webPushMsg, setWebPushMsg] = useState('');
+  const [webPushCargando, setWebPushCargando] = useState(false);
+
+  useEffect(() => {
+    if (silencioGuardado) {
+      setSilencioInicio(silencioGuardado.inicio ?? '22:00');
+      setSilencioFin(silencioGuardado.fin ?? '07:30');
+    }
+  }, [silencioGuardado]);
+
+  function guardarSilencio() {
+    if (!RE_HORA.test(silencioInicio) || !RE_HORA.test(silencioFin)) {
+      setSilencioMsg('Usa formato HH:MM (ej. 22:00)');
+      return;
+    }
+    guardar.mutate(
+      { ...((preferencias ?? {}) as Record<string, unknown>), silencio: { inicio: silencioInicio, fin: silencioFin } },
+      { onSuccess: () => setSilencioMsg('Guardado ✓'), onError: (e) => setSilencioMsg((e as Error).message) },
+    );
+  }
+
+  async function suscribirWebPush() {
+    setWebPushCargando(true);
+    setWebPushMsg('');
+    try {
+      const token = await obtenerTokenWebPush();
+      await registrarDispositivo.mutateAsync({ plataforma: 'web', token });
+      setWebPushMsg('Notificaciones activadas ✓');
+    } catch (e: unknown) {
+      setWebPushMsg((e as Error).message);
+    } finally {
+      setWebPushCargando(false);
+    }
+  }
 
   async function handleImportar() {
     try {
@@ -224,9 +274,69 @@ export default function Respaldo() {
           <TouchableOpacity onPress={() => router.back()} style={styles.btnVolver}>
             <Text style={styles.txtVolver}>← Volver</Text>
           </TouchableOpacity>
-          <Text style={styles.titulo}>Respaldo</Text>
+          <Text style={styles.titulo}>Ajustes</Text>
         </View>
 
+        {/* ── Notificaciones ─────────────────────────── */}
+        <View style={styles.seccion}>
+          <Text style={styles.seccionTit}>Notificaciones</Text>
+
+          <View style={styles.filaHoras}>
+            <View style={styles.campoHora}>
+              <Text style={styles.labelHora}>No molestar desde</Text>
+              <TextInput
+                style={styles.inputHora}
+                value={silencioInicio}
+                onChangeText={setSilencioInicio}
+                placeholder="22:00"
+                placeholderTextColor={MORRIS.oliva}
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+            <Text style={styles.separadorHora}>–</Text>
+            <View style={styles.campoHora}>
+              <Text style={styles.labelHora}>Hasta</Text>
+              <TextInput
+                style={styles.inputHora}
+                value={silencioFin}
+                onChangeText={setSilencioFin}
+                placeholder="07:30"
+                placeholderTextColor={MORRIS.oliva}
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnGuardarHoras, guardar.isPending && styles.btnDisabled]}
+              onPress={guardarSilencio}
+              disabled={guardar.isPending}
+            >
+              <Text style={styles.btnTxt}>Guardar</Text>
+            </TouchableOpacity>
+          </View>
+          {silencioMsg ? <Text style={styles.infoMsg}>{silencioMsg}</Text> : null}
+
+          {Platform.OS === 'web' && (
+            <>
+              <Text style={[styles.descripcion, { marginTop: 12 }]}>
+                Activa las notificaciones push en este navegador para recibir alertas aunque la app esté en segundo plano.
+              </Text>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnWebPush, webPushCargando && styles.btnDisabled]}
+                onPress={suscribirWebPush}
+                disabled={webPushCargando}
+              >
+                <Text style={styles.btnTxt}>
+                  {webPushCargando ? 'Activando…' : 'Activar notificaciones web'}
+                </Text>
+              </TouchableOpacity>
+              {webPushMsg ? <Text style={styles.infoMsg}>{webPushMsg}</Text> : null}
+            </>
+          )}
+        </View>
+
+        {/* ── Respaldo ────────────────────────────────── */}
         <View style={styles.seccion}>
           <Text style={styles.seccionTit}>Importar del Gabinete</Text>
           <Text style={styles.descripcion}>
@@ -284,9 +394,28 @@ const styles = StyleSheet.create({
   },
   seccionTit: { ...TIPOGRAFIA.titulo, fontSize: 16, color: MORRIS.tinta },
   descripcion: { ...TIPOGRAFIA.cuerpo, fontSize: 14, color: MORRIS.oliva, lineHeight: 20 },
+  filaHoras: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap' },
+  campoHora: { gap: 4 },
+  labelHora: { ...TIPOGRAFIA.etiqueta, fontSize: 11, color: MORRIS.oliva },
+  inputHora: {
+    ...TIPOGRAFIA.cuerpo,
+    fontSize: 15,
+    color: MORRIS.tinta,
+    borderWidth: 1,
+    borderColor: HOJAS.malvaGris,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    width: 72,
+    backgroundColor: '#fff',
+  },
+  separadorHora: { ...TIPOGRAFIA.titulo, fontSize: 18, color: MORRIS.oliva, paddingBottom: 6 },
+  btnGuardarHoras: { backgroundColor: HOJAS.caramelo, paddingVertical: 8, paddingHorizontal: 14 },
+  infoMsg: { ...TIPOGRAFIA.etiqueta, fontSize: 12, color: MORRIS.salviaMorris },
   btn: { borderRadius: 8, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center' },
   btnImportar: { backgroundColor: MORRIS.granate },
   btnExportar: { backgroundColor: SUCULENTAS.pizarra },
+  btnWebPush: { backgroundColor: MORRIS.salviaMorris },
   btnDisabled: { opacity: 0.5 },
   btnTxt: { ...TIPOGRAFIA.etiqueta, fontSize: 12, color: HOJAS.hueso },
   mensajeBox: {

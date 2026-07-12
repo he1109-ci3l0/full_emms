@@ -8,6 +8,7 @@ import { BricolageGrotesque_400Regular } from '@expo-google-fonts/bricolage-grot
 import { Nobile_500Medium } from '@expo-google-fonts/nobile';
 import { Zeyada_400Regular } from '@expo-google-fonts/zeyada';
 import { supabase } from '../src/lib/supabase';
+import { registrarDispositivoAndroid } from '../src/lib/notificaciones';
 import { AvisoProvider } from '../src/components/Aviso';
 import { MORRIS, HOJAS } from '../src/theme/colores';
 import { Session } from '@supabase/supabase-js';
@@ -27,11 +28,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     supabase.auth.getSession()
-      .then(({ data }) => setSession(data.session))
+      .then(({ data }) => {
+        setSession(data.session);
+        if (data.session) registrarDispositivoAndroid().catch(() => {});
+      })
       .catch(() => setSession(null));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      if (s) registrarDispositivoAndroid().catch(() => {});
     });
     return () => subscription.unsubscribe();
   }, []);

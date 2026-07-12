@@ -10,7 +10,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FondoFloral from '../src/components/FondoFloral';
-import { useBuscarChats, useConversaciones } from '../src/lib/api/secretaria';
+import { useBuscarChats, useConversaciones, useMensajes } from '../src/lib/api/secretaria';
+import { chatStore } from '../src/lib/chatStore';
 import { HOJAS, MORRIS, SUCULENTAS } from '../src/theme/colores';
 import { TIPOGRAFIA } from '../src/theme/tipografia';
 import type { Conversacion } from '../src/types/secretaria';
@@ -35,6 +36,7 @@ export default function Chats() {
   const conversaciones: Conversacion[] = hayFiltro ? encontradas : todas;
 
   function abrirConversacion(id: string) {
+    chatStore.activar(id);
     router.back();
   }
 
@@ -93,12 +95,15 @@ export default function Chats() {
           <Text style={s.vacio}>{hayFiltro ? 'Sin resultados' : 'Sin conversaciones'}</Text>
         ) : (
           conversaciones.map((c) => (
-            <TouchableOpacity key={c.id} style={s.convCard} onPress={() => abrirConversacion(c.id)}>
+            <View key={c.id} style={s.convCard}>
               <View style={s.convHeader}>
                 <Text style={s.convAsunto} numberOfLines={1}>{c.asunto}</Text>
                 <Text style={s.convFecha}>{formatFechaConv(c.ultima_actividad)}</Text>
               </View>
-            </TouchableOpacity>
+              <TouchableOpacity style={s.continuarBtn} onPress={() => abrirConversacion(c.id)}>
+                <Text style={s.continuarTxt}>continuar aquí →</Text>
+              </TouchableOpacity>
+            </View>
           ))
         )}
       </ScrollView>
@@ -179,4 +184,6 @@ const s = StyleSheet.create({
   convHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   convAsunto: { ...TIPOGRAFIA.titulo, fontSize: 14, color: MORRIS.granate, flex: 1 },
   convFecha: { ...TIPOGRAFIA.etiqueta, fontSize: 8, color: MORRIS.salviaMorris },
+  continuarBtn: { alignSelf: 'flex-start', paddingVertical: 2 },
+  continuarTxt: { ...TIPOGRAFIA.firma, fontSize: 15, color: MORRIS.oliva },
 });

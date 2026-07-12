@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Dimensions, Image, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -33,40 +33,28 @@ export default function Querubin({ onAbrir, visible }: QuerbinProps) {
   const propuestasPendientes = acciones.length;
 
   const posGuardada = preferencias?.querubin as { x: number; y: number } | undefined;
+  const defaultX = W - tam - MARGEN;
+  const defaultY = H - tam - TAB_BAR_H - insets.bottom - MARGEN * 2;
 
-  const xInicio = posGuardada?.x ?? W - tam - MARGEN;
-  const yInicio = posGuardada?.y ?? H - tam - TAB_BAR_H - insets.bottom - MARGEN * 2;
+  const x = useSharedValue(posGuardada?.x ?? defaultX);
+  const y = useSharedValue(posGuardada?.y ?? defaultY);
+  const xOrigen = useSharedValue(posGuardada?.x ?? defaultX);
+  const yOrigen = useSharedValue(posGuardada?.y ?? defaultY);
 
-  const x = useSharedValue(xInicio);
-  const y = useSharedValue(yInicio);
-  const xOffset = useSharedValue(0);
-  const yOffset = useSharedValue(0);
-  const arrastrado = useRef(false);
+  // Safe area bounds as shared values (stable after mount)
+  const safeTop = useSharedValue(insets.top + MARGEN);
+  const safeBottom = useSharedValue(H - tam - TAB_BAR_H - insets.bottom - MARGEN);
+  const safeLeft = useSharedValue(MARGEN);
+  const safeRight = useSharedValue(W - tam - MARGEN);
 
   useEffect(() => {
     if (posGuardada) {
       x.value = posGuardada.x;
       y.value = posGuardada.y;
+      xOrigen.value = posGuardada.x;
+      yOrigen.value = posGuardada.y;
     }
   }, [posGuardada]);
-
-  function clampX(v: number) {
-    'worklet';
-    return Math.max(MARGEN, Math.min(v, W - tam - MARGEN));
-  }
-
-  function clampY(v: number) {
-    'worklet';
-    const yMax = H - tam - TAB_BAR_H - insets.bottom - MARGEN;
-    return Math.max(insets.top + MARGEN, Math.min(v, yMax));
-  }
-
-  function magnetizar(xActual: number, yActual: number) {
-    'worklet';
-    const centroX = xActual + tam / 2;
-    const xMag = centroX < W / 2 ? MARGEN : W - tam - MARGEN;
-    return { xMag, yMag: clampY(yActual) };
-  }
 
   function persistir(xVal: number, yVal: number) {
     guardar.mutate({ ...((preferencias ?? {}) as Record<string, unknown>), querubin: { x: xVal, y: yVal } });
@@ -74,27 +62,31 @@ export default function Querubin({ onAbrir, visible }: QuerbinProps) {
 
   const pan = Gesture.Pan()
     .onStart(() => {
-      arrastrado.current = false;
-      xOffset.value = x.value;
-      yOffset.value = y.value;
+      'worklet';
+      xOrigen.value = x.value;
+      yOrigen.value = y.value;
     })
     .onUpdate((e) => {
-      arrastrado.current = Math.abs(e.translationX) > 4 || Math.abs(e.translationY) > 4;
-      x.value = clampX(xOffset.value + e.translationX);
-      y.value = clampY(yOffset.value + e.translationY);
+      'worklet';
+      x.value = Math.max(safeLeft.value, Math.min(xOrigen.value + e.translationX, safeRight.value));
+      y.value = Math.max(safeTop.value, Math.min(yOrigen.value + e.translationY, safeBottom.value));
     })
-    .onEnd(() => {
-      const { xMag, yMag } = magnetizar(x.value, y.value);
+    .onEnd((e) => {
+      'worklet';
+      const fueTap = Math.abs(e.translationX) < 8 && Math.abs(e.translationY) < 8;
+      if (fueTap) {
+        x.value = withSpring(xOrigen.value, { damping: 18, stiffness: 200 });
+        y.value = withSpring(yOrigen.value, { damping: 18, stiffness: 200 });
+        runOnJS(onAbrir)();
+        return;
+      }
+      const centroX = x.value + tam / 2;
+      const xMag = centroX < safeRight.value / 2 + safeLeft.value / 2 ? safeLeft.value : safeRight.value;
+      const yMag = Math.max(safeTop.value, Math.min(y.value, safeBottom.value));
       x.value = withSpring(xMag, { damping: 15, stiffness: 180 });
       y.value = withSpring(yMag, { damping: 15, stiffness: 180 });
       runOnJS(persistir)(xMag, yMag);
     });
-
-  const tap = Gesture.Tap().onEnd(() => {
-    if (!arrastrado.current) runOnJS(onAbrir)();
-  });
-
-  const gesto = Gesture.Simultaneous(pan, tap);
 
   const estilo = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }],
@@ -103,7 +95,7 @@ export default function Querubin({ onAbrir, visible }: QuerbinProps) {
   if (!visible) return null;
 
   return (
-    <GestureDetector gesture={gesto}>
+    <GestureDetector gesture={pan}>
       <Animated.View style={[s.burbuja, { width: tam, height: tam, borderRadius: tam / 2 }, estilo]}>
         <Image source={require('../../assets/querubin_chat.jpg')} style={[s.img, { width: tam, height: tam, borderRadius: tam / 2 }]} />
         {propuestasPendientes > 0 && (

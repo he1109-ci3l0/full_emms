@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Querubin from '../../src/components/Querubin';
 import VentanaChat from '../../src/components/VentanaChat';
+import { chatStore } from '../../src/lib/chatStore';
 import { MORRIS } from '../../src/theme/colores';
 
 export default function TabsLayout() {
   const [chatAbierto, setChatAbierto] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
+
+  useEffect(() => {
+    chatStore.onActivar((id) => {
+      setConvId(id);
+      setChatAbierto(true);
+    });
+    const pendiente = chatStore.consumirPendiente();
+    if (pendiente) { setConvId(pendiente); setChatAbierto(true); }
+    return () => chatStore.offActivar();
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

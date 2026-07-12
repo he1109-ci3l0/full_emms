@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  useAccionesPendientes,
   useConfirmarAccion,
   useConversaciones,
   useCrearConversacion,
@@ -38,6 +37,27 @@ function TarjetaAccion({ propuesta }: { propuesta: Propuesta }) {
   const confirmar = useConfirmarAccion();
   const rechazar = useRechazarAccion();
   const [estado, setEstado] = useState<'pendiente' | 'aplicado' | 'rechazado'>('pendiente');
+  const [cargando, setCargando] = useState(false);
+
+  async function handleConfirmar() {
+    setCargando(true);
+    try {
+      await confirmar.mutateAsync(propuesta.id);
+      setEstado('aplicado');
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  async function handleRechazar() {
+    setCargando(true);
+    try {
+      await rechazar.mutateAsync(propuesta.id);
+      setEstado('rechazado');
+    } finally {
+      setCargando(false);
+    }
+  }
 
   return (
     <View style={s.tarjetaAccion}>
@@ -45,20 +65,16 @@ function TarjetaAccion({ propuesta }: { propuesta: Propuesta }) {
       {estado === 'pendiente' ? (
         <View style={s.tarjetaBtns}>
           <TouchableOpacity
-            style={[s.tarjetaBtn, { backgroundColor: MORRIS.granate }]}
-            onPress={async () => {
-              await confirmar.mutateAsync(propuesta.id);
-              setEstado('aplicado');
-            }}
+            style={[s.tarjetaBtn, { backgroundColor: MORRIS.granate }, cargando && s.tarjetaBtnDis]}
+            onPress={handleConfirmar}
+            disabled={cargando}
           >
             <Text style={s.tarjetaBtnTxt}>Confirmar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[s.tarjetaBtn, { backgroundColor: HOJAS.malvaGris }]}
-            onPress={async () => {
-              await rechazar.mutateAsync(propuesta.id);
-              setEstado('rechazado');
-            }}
+            style={[s.tarjetaBtn, { backgroundColor: HOJAS.malvaGris }, cargando && s.tarjetaBtnDis]}
+            onPress={handleRechazar}
+            disabled={cargando}
           >
             <Text style={s.tarjetaBtnTxt}>Rechazar</Text>
           </TouchableOpacity>
@@ -82,7 +98,7 @@ function BurbujaMensaje({ msg, propuestas }: { msg: Mensaje; propuestas?: Propue
         <Text style={s.burbujaTxt}>{msg.texto}</Text>
         <Text style={s.burbujaHora}>{hora}</Text>
       </View>
-      {propuestas && propuestas.length > 0 && (
+      {!esUsuaria && propuestas && propuestas.length > 0 && (
         <View style={s.propuestasWrap}>
           {propuestas.map((p) => <TarjetaAccion key={p.id} propuesta={p} />)}
         </View>
@@ -96,17 +112,17 @@ export default function VentanaChat({ onMinimizar, conversacionId, onConversacio
   const scrollRef = useRef<ScrollView>(null);
   const [texto, setTexto] = useState('');
   const [escribiendo, setEscribiendo] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // propuestasUltimoMsg: keyed by agent message ID (or 'pending' before ID known)
+  const [propuestasMapa, setPropuestasMapa] = useState<Record<string, Propuesta[]>>({});
+  // track the last agent msg ID to attach proposals
+  const pendingPropuestasRef = useRef<Propuesta[] | null>(null);
 
   const { data: conversaciones = [] } = useConversaciones();
   const crearConv = useCrearConversacion();
   const { data: mensajes = [] } = useMensajes(conversacionId);
-  const { data: acciones = [] } = useAccionesPendientes();
   const enviar = useEnviarMensaje();
-
-  const propuestasPorMsg = React.useMemo(() => {
-    const mapa: Record<string, Propuesta[]> = {};
-    return mapa;
-  }, [acciones]);
 
   useEffect(() => {
     if (!conversacionId && conversaciones.length > 0) {
@@ -114,8 +130,19 @@ export default function VentanaChat({ onMinimizar, conversacionId, onConversacio
     }
   }, [conversaciones, conversacionId]);
 
+  // When messages refresh after a send, attach pending proposals to the last agent msg
   useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    if (pendingPropuestasRef.current && pendingPropuestasRef.current.length > 0) {
+      const ultimoAgente = [...mensajes].reverse().find((m) => m.rol === 'agente');
+      if (ultimoAgente) {
+        setPropuestasMapa((prev) => ({
+          ...prev,
+          [ultimoAgente.id]: pendingPropuestasRef.current!,
+        }));
+        pendingPropuestasRef.current = null;
+      }
+    }
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
   }, [mensajes]);
 
   async function asegurarConversacion(): Promise<string> {
@@ -129,19 +156,34 @@ export default function VentanaChat({ onMinimizar, conversacionId, onConversacio
     const txt = texto.trim();
     if (!txt || enviar.isPending) return;
     setTexto('');
+    setErrorMsg(null);
     setEscribiendo(true);
-    const convId = await asegurarConversacion();
-    const resp = await enviar.mutateAsync({ conversacion_id: convId, mensaje: txt });
-    setEscribiendo(false);
-    if (resp.propuestas?.length) {
-      const ultimo = mensajes[mensajes.length - 1];
-      if (ultimo) propuestasPorMsg[ultimo.id] = resp.propuestas;
+    try {
+      const convId = await asegurarConversacion();
+      const resp = await enviar.mutateAsync({ conversacion_id: convId, mensaje: txt });
+      if (resp.propuestas?.length) {
+        pendingPropuestasRef.current = resp.propuestas;
+      }
+    } catch (e) {
+      const msg = (e as Error).message ?? '';
+      if (msg.includes('API') || msg.includes('anthropic') || msg.toLowerCase().includes('key')) {
+        setErrorMsg('La secretaria aún no está activada. Falta configurar la API key en Supabase.');
+      } else if (msg.includes('404') || msg.includes('not found')) {
+        setErrorMsg('La secretaria aún no está desplegada.');
+      } else {
+        setErrorMsg('Error al conectar con la secretaria. Intenta de nuevo.');
+      }
+    } finally {
+      setEscribiendo(false);
     }
   }
 
   async function nuevaConversacion() {
     const nueva = await crearConv.mutateAsync();
     onConversacionId(nueva.id);
+    setPropuestasMapa({});
+    pendingPropuestasRef.current = null;
+    setErrorMsg(null);
   }
 
   return (
@@ -175,17 +217,22 @@ export default function VentanaChat({ onMinimizar, conversacionId, onConversacio
         contentContainerStyle={s.mensajesPad}
         keyboardShouldPersistTaps="handled"
       >
-        {mensajes.length === 0 && (
+        {mensajes.length === 0 && !escribiendo && (
           <Text style={s.vacio}>Hola, ¿en qué te ayudo?</Text>
         )}
         {mensajes.map((msg) => (
-          <BurbujaMensaje key={msg.id} msg={msg} propuestas={propuestasPorMsg[msg.id]} />
+          <BurbujaMensaje key={msg.id} msg={msg} propuestas={propuestasMapa[msg.id]} />
         ))}
         {escribiendo && (
           <View style={[s.burbujaWrap, s.burbujaWrapIzq]}>
             <View style={[s.burbuja, s.burbujaAgente]}>
-              <Text style={[s.burbujaTxt, TIPOGRAFIA.firma]}>escribiendo…</Text>
+              <Text style={[s.burbujaTxt, { fontFamily: 'Zeyada_400Regular', fontSize: 18 }]}>escribiendo…</Text>
             </View>
+          </View>
+        )}
+        {errorMsg && (
+          <View style={s.errorWrap}>
+            <Text style={s.errorTxt}>{errorMsg}</Text>
           </View>
         )}
       </ScrollView>
@@ -203,7 +250,11 @@ export default function VentanaChat({ onMinimizar, conversacionId, onConversacio
           blurOnSubmit={false}
           returnKeyType="send"
         />
-        <TouchableOpacity style={[s.enviarBtn, !texto.trim() && s.enviarBtnDis]} onPress={enviarMensaje} disabled={!texto.trim() || enviar.isPending}>
+        <TouchableOpacity
+          style={[s.enviarBtn, (!texto.trim() || enviar.isPending) && s.enviarBtnDis]}
+          onPress={enviarMensaje}
+          disabled={!texto.trim() || enviar.isPending}
+        >
           <Text style={s.enviarTxt}>↑</Text>
         </TouchableOpacity>
       </View>
@@ -236,7 +287,6 @@ const s = StyleSheet.create({
     height: '80%',
     borderTopLeftRadius: 20,
   },
-
   header: {
     height: 52,
     overflow: 'hidden',
@@ -286,8 +336,19 @@ const s = StyleSheet.create({
   tarjetaDesc: { ...TIPOGRAFIA.cuerpo, fontSize: 13, color: MORRIS.tinta },
   tarjetaBtns: { flexDirection: 'row', gap: 8 },
   tarjetaBtn: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6 },
+  tarjetaBtnDis: { opacity: 0.5 },
   tarjetaBtnTxt: { ...TIPOGRAFIA.etiqueta, fontSize: 9, color: '#fff' },
   tarjetaEstado: { ...TIPOGRAFIA.firma, fontSize: 14 },
+
+  errorWrap: {
+    backgroundColor: 'rgba(103,45,56,0.1)',
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: MORRIS.granate,
+    padding: 12,
+    marginTop: 4,
+  },
+  errorTxt: { ...TIPOGRAFIA.cuerpo, fontSize: 13, color: MORRIS.granate },
 
   inputBar: {
     flexDirection: 'row',
